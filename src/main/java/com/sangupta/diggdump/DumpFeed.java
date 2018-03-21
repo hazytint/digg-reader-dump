@@ -7,53 +7,67 @@ import com.sangupta.jerry.http.WebResponse;
 import com.sangupta.jerry.util.GsonUtils;
 import com.sangupta.jerry.util.UriUtils;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+
 public abstract class DumpFeed extends DiggDumpCommand {
 	
 	protected abstract String getFeedUrl();
 
 	@Override
 	public void execute() {
-		String nextPosition = null;
-		
-		do {
-			String url = "http://digg.com/api/reader/feed.json?feed_url=" + UriUtils.encodeURIComponent(getFeedUrl()) + "&count=50&show=all";
-			if(nextPosition != null) {
-				url += "&position=" + nextPosition;
-			}
-			
-			WebRequest request = WebRequest.get(url);
-			massageUrlForAuthorization(request);
-			WebResponse response = WebInvoker.executeSilently(request);
-			if(response == null) {
-				System.out.println("Unable to hit the internet to fetch subscriptions.");
-				return;
-			}
-			
-			if(!response.isSuccess()) {
-				System.out.print("Non-success response from the server: ");
-				System.out.println(response.trace());
-				return;
-			}
-			
-			String json = response.getContent();
-			SubscriptionResult result = GsonUtils.getGson(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES).fromJson(response.getContent(), SubscriptionResult.class);
-			if(result == null) {
-				System.out.println("Response is misunderstood, contact the developer!");
-				return;
-			}
-			
-			if(result.data == null || result.data.feed == null || result.data.feed.length == 0) {
-				System.out.println("There are no feeds in your subscriptions.");
-				return;
-			}
-			
-			// start iterating and show the data on screen
-			for(Feed feed : result.data.feed) {
-				System.out.println(feed.publishDate + ": " + feed.content.title);
-			}
-			
-			nextPosition = result.data.nextPosition;
-		} while(true);
+		try {
+			String nextPosition = null;
+			File file = new File("feed.json");
+			FileWriter fw = null;
+			fw = new FileWriter(file);
+			BufferedWriter bw = new BufferedWriter(fw);
+			do {
+				String url = "http://digg.com/api/reader/feed.json?feed_url=" + UriUtils.encodeURIComponent(getFeedUrl()) + "&count=50&show=all";
+				if (nextPosition != null) {
+					url += "&position=" + nextPosition;
+				}
+
+				WebRequest request = WebRequest.get(url);
+				massageUrlForAuthorization(request);
+				WebResponse response = WebInvoker.executeSilently(request);
+				if (response == null) {
+					System.out.println("Unable to hit the internet to fetch subscriptions.");
+					return;
+				}
+
+				if (!response.isSuccess()) {
+					System.out.print("Non-success response from the server: ");
+					System.out.println(response.trace());
+					return;
+				}
+
+				String json = response.getContent();
+				SubscriptionResult result = GsonUtils.getGson(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES).fromJson(response.getContent(), SubscriptionResult.class);
+				if (result == null) {
+					System.out.println("Response is misunderstood, contact the developer!");
+					return;
+				}
+
+				if (result.data == null || result.data.feed == null || result.data.feed.length == 0) {
+					System.out.println("There are no feeds in your subscriptions.");
+					return;
+				}
+
+				// start iterating and show the data on screen
+				for (Feed feed : result.data.feed) {
+					String data = GsonUtils.getGson(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES).toJson(feed);
+					bw.write(data + "\n");
+					System.out.println(feed.content.title);
+				}
+
+				nextPosition = result.data.nextPosition;
+			} while (true);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 
 	private static class SubscriptionResult {
